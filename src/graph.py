@@ -1,0 +1,59 @@
+"""graph.py
+Construit le LangGraph en reliant les nœuds et expose la fonction build_graph().
+Le state est importé directement depuis `state.py`.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+from langgraph.graph import END, START, StateGraph
+
+from src.state import GraphState
+
+if TYPE_CHECKING:
+    from langgraph import CompiledGraph  # type: ignore
+
+def build_graph() -> "CompiledGraph[GraphState]":
+    """Construit et compile le graph LangGraph"""
+
+    graph = StateGraph(GraphState)
+
+    # --- Déclaration des nœuds ----------------------------------------------------
+    from src.nodes import (
+        extract_node,
+        clean_node,
+        segment_node,
+        analyze_node,
+        judge_node,
+        cluster_node,
+        label_node,  
+        meta_cluster_node,
+        compile_node
+    )
+    
+
+    graph.add_node("extract", extract_node)
+    graph.add_node("clean", clean_node)
+    graph.add_node("segment", segment_node)
+    graph.add_node("analyze", analyze_node)
+    graph.add_node("judge", judge_node)
+    graph.add_node("cluster", cluster_node)
+    graph.add_node("label", label_node)
+    graph.add_node("meta_cluster", meta_cluster_node)
+    graph.add_node("compile", compile_node)
+
+    # --- Connexions ---------------------------------------------------------------
+
+    graph.add_edge(START, "extract")
+    graph.add_edge("extract", "clean")
+    graph.add_edge("clean", "segment")
+    graph.add_edge("segment", "analyze")
+    graph.add_edge("analyze", "judge")
+    graph.add_edge("judge", "cluster")
+    graph.add_edge("cluster", "label")
+    graph.add_edge("label", "meta_cluster")
+    graph.add_edge("meta_cluster", "compile")
+    graph.add_edge("compile", END)
+
+    # Compilation du graph
+    return graph.compile()

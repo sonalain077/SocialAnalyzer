@@ -1,0 +1,11 @@
+python-dotenv
+pandas
+PyPDF2
+scikit-learn
+sentence-transformers
+groq
+langgraph
+langgraph-prebuilt
+langgraph-sdk
+langgraph-checkpoint-sqlite
+langgraph-cli[inmem]
