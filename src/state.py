@@ -16,7 +16,14 @@ __all__ = [
     "OutputState",
     "GraphState"
 ]
+from pydantic import BaseModel
 
+class CodeExcerpt(BaseModel):
+    code: str
+    excerpt: str
+
+class CodedSegment(BaseModel):
+    codes: List[CodeExcerpt]  # Un segment contient plusieurs codes
 # Types pour les entrées du graphe
 class InputState(TypedDict):
     pdf_path: str
@@ -60,6 +67,8 @@ class GraphState(TypedDictExt, total=False):
     temperature: float
     api_key: str
     logs: List[str]
+    meta_theme_labels: Dict[int, str]  # Nouveau
+    theme_to_meta: Dict[int, int]  
 
 def ensure_api_key(state: GraphState) -> str:
     if state.get('api_key'):

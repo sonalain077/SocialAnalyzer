@@ -5,7 +5,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 import io # Ajouté pour le téléchargement
 import tempfile # Ajouté pour les fichiers temporaires
-
+from groq import BadRequestError
 import pandas as pd
 import PyPDF2
 from dotenv import load_dotenv
@@ -14,7 +14,7 @@ from sentence_transformers import SentenceTransformer
 from sklearn.cluster import AgglomerativeClustering
 from groq import RateLimitError
 # Retry configuration
-GROQ_MODEL = "llama3-70b-8192"  # Ou 'llama3-8b-8192' pour plus rapide
+GROQ_MODEL = "llama-3.1-8b-instant"  # Ou 'llama3-8b-8192' pour plus rapide
 TEMPERATURE = 0.7  # Créativité
 MAX_RETRIES = 5
 INITIAL_DELAY = 1
@@ -1453,22 +1453,22 @@ def review_and_improve_with_groq(
 
     # --- PROMPT ADAPTÉ POUR JSON ---
     user_prompt = f"""
-Titre de section: {meta}
+    Titre de section: {meta}
 
-Paragraphe à évaluer:
-"{paragraph_for_review}"
+    Paragraphe à évaluer:
+    "{paragraph_for_review}"
 
-Extraits originaux (pour référence):
-{excerpts_str}
+    Extraits originaux (pour référence):
+    {excerpts_str}
 
-1. Identifie 1 ou 2 points d'amélioration précis (fidélité, clarté, nuance)
-2. Propose une version améliorée du paragraphe (100-150 mots) qui intègre AU MOINS un extrait complet entre guillemets doubles.
+    1. Identifie 1 ou 2 points d'amélioration précis (fidélité, clarté, nuance)
+    2. Propose une version améliorée du paragraphe (100-150 mots) qui intègre AU MOINS un extrait complet entre guillemets doubles.
 
-Réponds STRICTEMENT au format JSON comme ceci:
-{{
-  "critique": ["Point d'amélioration 1", "Point d'amélioration 2 (optionnel)"],
-  "improved_paragraph": "Paragraphe amélioré (100-150 mots avec au moins un extrait entre guillemets)"
-}}
+    Réponds STRICTEMENT au format JSON comme ceci:
+    {{
+    "critique": ["Point d'amélioration 1", "Point d'amélioration 2 (optionnel)"],
+    "improved_paragraph": "Paragraphe amélioré (100-150 mots avec au moins un extrait entre guillemets)"
+    }}
 """
     # --- FIN PROMPT ADAPTÉ ---
 
@@ -1520,7 +1520,7 @@ Réponds STRICTEMENT au format JSON comme ceci:
             )
             last_error = e
             time.sleep(delay)
-        except APIStatusError as e:
+        except BadRequestError as e:
             logging.error(
                 f"Erreur API lors de la révision pour '{meta}' (Attempt {attempt + 1}/{MAX_RETRIES}). Code: {e.status_code}. Message: {e.response.text}"
             )
@@ -1854,7 +1854,7 @@ def segment_node(state: GraphState) -> Dict:
 def analyze_node(state: GraphState) -> Dict:
     api_key = load_api_key()
     client = create_groq_client(api_key)
-    model = state.get("model_name", "llama3-70b-8192")
+    model = state.get("model_name", "llama-3.1-8b-instant")
     all_codes = []
     for seg in state["segments"]:
         codes = analyze_and_code_segment(client, model, seg)
@@ -1868,7 +1868,7 @@ def analyze_node(state: GraphState) -> Dict:
 def judge_node(state: GraphState) -> Dict:
     api_key = load_api_key()
     client = create_groq_client(api_key)
-    model = "llama3-70b-8192"
+    model = "llama-3.1-8b-instant"
     validated = []
     for seg in state["segments"]:
         codes_for_seg = [c for c in state["all_codes"] if c.get("segment") == seg]
@@ -1888,15 +1888,16 @@ def cluster_node(state: GraphState) -> Dict:
 def label_node(state: GraphState) -> Dict:
     api_key = load_api_key()
     client = create_groq_client(api_key)
-    model = state.get("model_name", "llama3-70b-8192")
+    model = state.get("model_name", "llama-3.1-8b-instant")
     theme_labels = label_themes(client, model, state["clusters"])
     return {"theme_labels": theme_labels}
 
 
-def meta_cluster_node(state: GraphState) -> Dict:
+def meta_cluster_node(state: GraphState) -> GraphState:
     api_key = load_api_key()
     client = create_groq_client(api_key)
-    model = state.get("model_name", "llama3-70b-8192")
+    model = state.get("model_name", "llama-3.1-8b-instant")
+
     meta_theme_map, theme_to_meta = meta_cluster_themes(
         client,
         model,
@@ -1904,13 +1905,16 @@ def meta_cluster_node(state: GraphState) -> Dict:
         state["theme_labels"],
         state["max_themes"]
     )
-    return {
-        "meta_theme_map": meta_theme_map,
-        "theme_to_meta": theme_to_meta
-    }
+
+    # Met à jour directement le state
+    state["meta_theme_map"] = meta_theme_map
+    state["theme_to_meta"] = theme_to_meta
+
+    return state
 
 
-def compile_node(state: GraphState) -> Dict:
+
+def compile_node(state: GraphState) -> GraphState:
     # Fallback si le méta-clustering n'a pas été fait
     meta_theme_map = state.get("meta_theme_map")
     theme_to_meta = state.get("theme_to_meta")
@@ -1921,7 +1925,7 @@ def compile_node(state: GraphState) -> Dict:
         theme_to_meta = {k: k for k in state["theme_labels"].keys()}
 
     df = compile_results_with_meta(
-        state["validated_segments"],
+        state["all_codes"],           # Utilise all_codes ici pour avoir tous les codes à plat
         state["code_to_cluster"],
         state["theme_labels"],
         meta_theme_map,
@@ -1933,10 +1937,11 @@ def compile_node(state: GraphState) -> Dict:
     output_file = os.path.join(output_dir, "final_results.csv")
     df.to_csv(output_file, index=False, encoding='utf-8-sig')
 
-    return {
-        "final_report": f"Résultats compilés dans {output_file}",
-        "output_files": {"csv": output_file}
-    }
+    # Met à jour directement le state
+    state["final_report"] = f"Résultats compilés dans {output_file}"
+    state["output_files"] = {"csv": output_file}
+
+    return state
 
 __all__ = [
     'extract_node',
@@ -1984,3 +1989,6 @@ def load_data(filepath: str) -> pd.DataFrame:
     if df.empty:
         raise ValueError(f"Le fichier {filepath} est vide.")
     return df
+
+
+
