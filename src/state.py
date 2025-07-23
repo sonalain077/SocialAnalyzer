@@ -3,7 +3,7 @@ Définition des types d'état pour le graphe LangGraph.
 """
 
 from __future__ import annotations
-
+from groq import Groq
 import os
 from typing import Any, Dict, List, Annotated, TypedDict
 from typing_extensions import TypedDict as TypedDictExt
@@ -16,14 +16,7 @@ __all__ = [
     "OutputState",
     "GraphState"
 ]
-from pydantic import BaseModel
 
-class CodeExcerpt(BaseModel):
-    code: str
-    excerpt: str
-
-class CodedSegment(BaseModel):
-    codes: List[CodeExcerpt]  # Un segment contient plusieurs codes
 # Types pour les entrées du graphe
 class InputState(TypedDict):
     pdf_path: str
@@ -51,6 +44,7 @@ class OutputState(TypedDict):
 # État global du graphe
 class GraphState(TypedDictExt, total=False):
     pdf_path: str
+
     max_themes: int
     raw_text: str
     clean_text: str
@@ -69,6 +63,9 @@ class GraphState(TypedDictExt, total=False):
     logs: List[str]
     meta_theme_labels: Dict[int, str]  # Nouveau
     theme_to_meta: Dict[int, int]  
+    global_synthesis: str
+    files_processed: int 
+    num_files: int
 
 def ensure_api_key(state: GraphState) -> str:
     if state.get('api_key'):

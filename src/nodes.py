@@ -13,6 +13,7 @@ from groq import Groq
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import AgglomerativeClustering
 from groq import RateLimitError
+from pathlib import Path
 # Retry configuration
 GROQ_MODEL = "llama-3.1-8b-instant"  # Ou 'llama3-8b-8192' pour plus rapide
 TEMPERATURE = 0.7  # Créativité
@@ -151,62 +152,48 @@ def segment_text(text: str, chunk_size: int = 1200, overlap: int = 150) -> List[
 # Étape 2 & 3 : Analyse CoT + Codification (INCHANGÉ)
 # -------------------------------------
 
-def extract_json_from_text(text: str) -> Optional[List[Dict[str, Any]]]:
-    """Extrait du JSON valide depuis un texte potentiellement mélangé."""
-    # Essayer d'abord avec une recherche stricte de tableau JSON
-    json_array_match = re.search(r"^\s*(\[.*\])\s*$", text, re.DOTALL)
-    if json_array_match:
-        json_str = json_array_match.group(1)
-        try:
-            # Valider avec le module json
-            parsed = json.loads(json_str)
-            if isinstance(parsed, list): # Assurer que c'est une liste
-                logger.debug("JSON array extrait avec regex stricte.")
-                return parsed
-        except json.JSONDecodeError:
-             logger.warning(f"Regex a trouvé un pattern JSON array, mais le parsing a échoué: {json_str[:100]}...")
-             pass # Continuer avec d'autres méthodes
+def extract_json_from_text(text: str):
+    """
+    Extraction robuste d'un tableau JSON d'un texte potentiellement bruité.
+    - Utilise plusieurs heuristiques pour tolérer les formats ambigus.
+    """
+    # Tentative stricte
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
 
-    # Rechercher un pattern JSON (array) dans le texte, même s'il y a du texte autour
-    json_pattern = r"\[\s*\{.*?\}\s*(?:,\s*\{.*?\})*\s*\]" # Recherche un array d'objets
-    match = re.search(json_pattern, text, re.DOTALL)
-
+    # Recherche entre crochets
+    match = re.search(r"\[.*\]", text, re.DOTALL)
     if match:
-        json_str = match.group(0)
+        json_candidate = match.group(0)
+
+        # Tentative 1 : json.loads
         try:
-            parsed = json.loads(json_str)
+            return json.loads(json_candidate)
+        except json.JSONDecodeError as e:
+            logger.warning(f"json.loads a échoué: {e}")
+
+        # Tentative 2 : json5 (si installé)
+        try:
+            import json5
+            return json5.loads(json_candidate)
+        except ImportError:
+            logger.info("json5 non installé, skip.")
+        except Exception as e:
+            logger.warning(f"json5 a échoué: {e}")
+
+        # Tentative 3 : ast.literal_eval pour des listes de dicts proches du Python
+        try:
+            parsed = ast.literal_eval(json_candidate)
             if isinstance(parsed, list):
-                logger.debug("JSON array extrait avec regex large.")
+                logger.info("Extraction avec ast.literal_eval réussie.")
                 return parsed
-        except json.JSONDecodeError:
-            logger.warning(f"Regex a trouvé un pattern JSON array potentiel, mais le parsing a échoué: {json_str[:100]}...")
-            pass
+        except Exception as e:
+            logger.warning(f"ast.literal_eval a échoué: {e}")
 
-    # Essayer d'extraire entre les premiers '[' et les derniers ']' comme fallback
-    start = text.find("[")
-    end = text.rfind("]")
-    if start != -1 and end != -1 and end > start:
-        potential_json = text[start : end + 1]
-        try:
-            parsed = json.loads(potential_json)
-            # Vérifier si c'est une liste d'objets (ou une liste vide)
-            if isinstance(parsed, list):
-                 is_list_of_dicts = all(isinstance(item, dict) for item in parsed)
-                 if is_list_of_dicts or not parsed: # Accepter liste vide ou liste de dicts
-                    logger.debug("JSON array extrait entre crochets [ ... ].")
-                    return parsed
-                 else:
-                     logger.warning("JSON extrait entre crochets n'est pas une liste de dictionnaires.")
-            else:
-                 logger.warning("JSON extrait entre crochets n'est pas une liste.")
-
-        except json.JSONDecodeError:
-            logger.warning(f"Tentative d'extraction JSON entre crochets [ ... ] a échoué pour: {potential_json[:100]}...")
-            pass
-
-    logger.warning("Aucun JSON valide (array de dicts) n'a pu être extrait du texte.")
+    logger.error("Impossible d'extraire un JSON valide après toutes les tentatives.")
     return None
-
 
 def analyze_and_code_segment(
     client: Groq, model: str, segment: str, max_retries: int = 2
@@ -271,9 +258,10 @@ def analyze_and_code_segment(
             resp = client.chat.completions.create(
                 model=model,
                 messages=messages,
-                temperature=0.2,
+                temperature=0.5,
                 max_tokens=1024, # Augmenté pour JSON + potentielle pensée CoT interne
                 stream=False,
+                
             )
             # Utiliser .strip() pour enlever les espaces/lignes vides avant/après
             raw_response_text = resp.choices[0].message.content.strip()
@@ -1914,46 +1902,41 @@ def meta_cluster_node(state: GraphState) -> GraphState:
 
 
 
+
 def compile_node(state: GraphState) -> GraphState:
-    # Fallback si le méta-clustering n'a pas été fait
+    from pathlib import Path
+    import os
+
     meta_theme_map = state.get("meta_theme_map")
     theme_to_meta = state.get("theme_to_meta")
 
     if meta_theme_map is None or theme_to_meta is None:
-        # Pas de méta-clustering : on considère chaque thème comme son propre méta-thème
         meta_theme_map = {k: v for k, v in state["theme_labels"].items()}
         theme_to_meta = {k: k for k in state["theme_labels"].keys()}
 
     df = compile_results_with_meta(
-        state["all_codes"],           # Utilise all_codes ici pour avoir tous les codes à plat
+        state["all_codes"],
         state["code_to_cluster"],
         state["theme_labels"],
         meta_theme_map,
         theme_to_meta
     )
 
-    output_dir = "./output"
+    output_dir = "data/outputs"
     os.makedirs(output_dir, exist_ok=True)
-    output_file = os.path.join(output_dir, "final_results.csv")
-    df.to_csv(output_file, index=False, encoding='utf-8-sig')
 
-    # Met à jour directement le state
-    state["final_report"] = f"Résultats compilés dans {output_file}"
-    state["output_files"] = {"csv": output_file}
+    basename = Path(state["pdf_path"]).stem
+    csv_output = os.path.join(output_dir, f"{basename}_clustering.csv")
+
+    df.to_csv(csv_output, index=False, encoding='utf-8-sig')
+
+    # Mise à jour propre de output_files
+    state.setdefault("output_files", {})
+    state["output_files"]["csv"] = csv_output
+
+    state["final_report"] = f"Résultats compilés dans {csv_output}"
 
     return state
-
-__all__ = [
-    'extract_node',
-    'clean_node',
-    'segment_node',
-    'analyze_node',
-    'judge_node',
-    'cluster_node',
-    'label_node',
-    'meta_cluster_node',
-    'compile_node'
-]
 def generate_full_report(client: Groq, csv_path: str, output_txt_path: str):
     """
     Génère un rapport sociologique complet depuis un CSV de clustering.
@@ -1982,6 +1965,82 @@ def generate_full_report(client: Groq, csv_path: str, output_txt_path: str):
         f.write(report)
 
     logger.info(f"Rapport complet sauvegardé dans {output_txt_path}")
+
+def report_node(state: GraphState) -> GraphState:
+    """
+    Génère le rapport final pour un entretien (version individuelle).
+    """
+    api_key = load_api_key()
+    client = create_groq_client(api_key)
+
+    # Récupère le chemin du CSV
+    csv_path = state["output_files"]["csv"]
+
+    # Utilise directement le dossier déjà existant
+    basename = os.path.basename(csv_path).replace("_clustering.csv", "_rapport.txt")
+    output_txt_path = os.path.join("data/repport", basename)
+
+    # Génère le rapport
+    generate_full_report(client=client, csv_path=csv_path, output_txt_path=output_txt_path)
+
+    # Met à jour le state pour le pipeline
+    state["output_files"]["rapport_txt"] = output_txt_path
+    state["final_report"] = f"Rapport complet généré : {output_txt_path}"
+    state["files_processed"] = state.get("files_processed", 0) + 1
+    return state
+
+def synthese_corpus_node(context):
+    """
+    Node LangGraph pour générer la synthèse globale du corpus.
+    """
+    logger.info("Démarrage de la synthèse globale du corpus")
+    api_key = load_api_key()
+    client = create_groq_client(api_key)
+    model = context.get("model_name", "llama-3.1-8b-instant")
+
+    all_codes = context["all_codes"]  # Liste complète des codes de tous les entretiens
+    theme_labels = context["theme_labels"]
+    code_to_cluster = context["code_to_cluster"]
+    clusters = context["clusters"]
+    meta_theme_labels = context.get("meta_theme_labels")
+    theme_to_meta = context.get("theme_to_meta")
+
+
+    # Appel à la fonction de génération de synthèse
+    synthese = generate_synthese(
+        client=client,
+        model=model,
+        clusters=clusters,
+        theme_labels=theme_labels,
+        meta_theme_labels=meta_theme_labels,
+        theme_to_meta=theme_to_meta
+    )
+
+    # Sauvegarde dans le contexte ou directement en fichier si besoin
+    context["rapport_global"] = synthese
+
+    # Optionnel : écrire dans un fichier
+    output_path = os.path.join("data", "repport", "rapport_global.txt")
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(synthese)
+
+    logger.info(f"Rapport global sauvegardé dans {output_path}")
+
+    return context
+
+__all__ = [
+    'extract_node',
+    'clean_node',
+    'segment_node',
+    'analyze_node',
+    'judge_node',
+    'cluster_node',
+    'label_node',
+    'meta_cluster_node',
+    'compile_node',
+    'report_node'
+]
+
 import pandas as pd
 def load_data(filepath: str) -> pd.DataFrame:
     """Charge un CSV en DataFrame avec validation basique."""
@@ -1990,5 +2049,89 @@ def load_data(filepath: str) -> pd.DataFrame:
         raise ValueError(f"Le fichier {filepath} est vide.")
     return df
 
+def generate_synthese(
+    client: Groq,
+    model: str,
+    clusters: Dict[int, List[Dict[str, Any]]],
+    theme_labels: Dict[int, str],
+    meta_theme_labels: Optional[Dict[int, str]] = None,
+    theme_to_meta: Optional[Dict[int, int]] = None,
+    max_retries: int = 2
+) -> str:
+    """
+    Génère un rapport d’analyse sociologique complet, interprétatif et problématisé.
+    """
+    # Construction du prompt
+    prompt = f"""
+Tu es un sociologue du numérique, spécialisé dans l'analyse qualitative assistée par intelligence artificielle.
 
+Tu disposes d'un codage thématique réalisé automatiquement à partir d'entretiens. Les données sont regroupées par thèmes et méta-thèmes, chaque thème étant associé à plusieurs extraits de verbatims (entre guillemets).
 
+Tu dois produire un **rapport de recherche sociologique**, structuré, interprétatif, problématisé.
+
+Le rapport doit inclure :
+
+1. **Introduction générale**
+   - Contexte de l'enquête
+   - Présentation rapide de la méthode : analyse qualitative, codage automatisé, regroupement en clusters.
+
+2. **Développement**
+    Concentre ton développement sur les **3 méta-thèmes les plus significatifs** du corpus, ceux où les discours révèlent le plus de complexité, de tensions ou de richesse sociologique. Pour chacun :
+    - Problématise sociologiquement.
+    - Mobilise plusieurs extraits illustratifs (au moins 2 par thème), que tu analyses.
+    - Interprète les postures exprimées (enthousiasme, crainte, dépendance, ruse, etc.)
+    - Compare les postures ou usages contrastés si nécessaire.
+    - Dégage les enjeux plus larges (école, autonomie, normativité, etc.)
+    - Mets en évidence les **tensions, ambivalences ou logiques sociales** révélées
+
+    Les autres thèmes peuvent être mentionnés brièvement dans une synthèse transversale ou en encadré récapitulatif, sans analyse approfondie.
+   
+
+3. **Conclusion critique**
+    - Résume les enseignements majeurs
+    - Met en lumière des typologies d’usagers si possible
+    - Souligne les enjeux sociétaux et éthiques
+    - Évoque les limites de l’enquête et des pistes de prolongement
+
+🎯 Sois analytique, nuancé, professionnel. Tu écris pour un lectorat universitaire ou expert.
+
+Voici les données :\n
+"""
+
+    # Ajouter les données structurées au prompt
+    for cluster_id, codes in clusters.items():
+        theme = theme_labels.get(cluster_id, f"Thème {cluster_id}")
+        meta_theme = ""
+        if meta_theme_labels and theme_to_meta:
+            meta_id = theme_to_meta.get(cluster_id)
+            meta_theme = meta_theme_labels.get(meta_id, "")
+
+        prompt += f"\n📌 Méta-thème : {meta_theme}\n"
+        prompt += f"### Thème : {theme}\n"
+        for code in codes:
+            excerpt = code.get("excerpt", "").strip().replace("\n", " ")
+            if excerpt:
+                prompt += f'- Extrait : "{excerpt}"\n'
+
+    # Envoi au modèle
+    messages = [{"role": "user", "content": prompt}]
+
+    for attempt in range(max_retries + 1):
+        try:
+            logger.info(f"Génération du rapport sociologique (tentative {attempt+1}/{max_retries+1})")
+            resp = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0.4,
+                max_tokens=4096,
+            )
+            result = resp.choices[0].message.content.strip()
+            if result:
+                logger.info("✅ Rapport global généré avec succès.")
+                return result
+        except Exception as e:
+            logger.error(f"Erreur lors de la génération du rapport (tentative {attempt+1}): {e}", exc_info=True)
+            if attempt == max_retries:
+                raise RuntimeError("Échec de la génération du rapport final.") from e
+
+    return ""

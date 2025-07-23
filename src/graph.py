@@ -13,6 +13,10 @@ from src.state import GraphState
 if TYPE_CHECKING:
     from langgraph import CompiledGraph  # type: ignore
 
+def should_generate_corpus_synthese(state: GraphState) -> bool:
+    return state.get("files_processed", 0) >= state.get("num_files", 1)
+
+
 def build_graph() -> "CompiledGraph[GraphState]":
     """Construit et compile le graph LangGraph"""
 
@@ -28,7 +32,9 @@ def build_graph() -> "CompiledGraph[GraphState]":
         cluster_node,
         label_node,  
         meta_cluster_node,
-        compile_node
+        compile_node,
+        report_node,
+        synthese_corpus_node
     )
     
 
@@ -41,6 +47,8 @@ def build_graph() -> "CompiledGraph[GraphState]":
     graph.add_node("label", label_node)
     graph.add_node("meta_cluster", meta_cluster_node)
     graph.add_node("compile", compile_node)
+    graph.add_node("rapport", report_node)
+    graph.add_node("synthese", synthese_corpus_node)
 
     # --- Connexions ---------------------------------------------------------------
 
@@ -53,7 +61,19 @@ def build_graph() -> "CompiledGraph[GraphState]":
     graph.add_edge("cluster", "label")
     graph.add_edge("label", "meta_cluster")
     graph.add_edge("meta_cluster", "compile")
-    graph.add_edge("compile", END)
+    graph.add_edge("compile", "rapport")
+    graph.add_edge("synthese", END) 
+
+    # Ajout de la condition pour la synthèse du corpus
+    graph.add_conditional_edges(
+        "rapport",
+        should_generate_corpus_synthese,
+        {
+            True: "synthese",  
+            False: "__end__",
+        },
+    )
+
 
     # Compilation du graph
     return graph.compile()
