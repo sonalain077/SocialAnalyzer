@@ -25,22 +25,6 @@ Ce projet propose un pipeline automatisé qui exploite les modèles d'intelligen
 
 ---
 
-## 📋 Structure du projet
-
-my_langgraph_project/
-├── data/
-│ ├── raw/ # PDFs originaux des entretiens
-│ └── repport/ # Rapports générés
-├── src/
-│ ├── main.py # Point d'entrée du pipeline
-│ ├── graph.py # Définition du workflow LangGraph
-│ ├── nodes/ # Modules fonctionnels du pipeline
-│ └── utils/ # Fonctions utilitaires
-├── .env.example # Modèle de variables d'environnement
-├── requirements.txt # Dépendances du projet
-└── README.md # Documentation du projet
-
-
 ## ⚙️ Installation & Configuration
 
 ### 1. Clonez le dépôt
