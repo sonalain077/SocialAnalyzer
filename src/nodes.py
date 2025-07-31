@@ -15,7 +15,7 @@ from sklearn.cluster import AgglomerativeClustering
 from groq import RateLimitError
 from pathlib import Path
 # Retry configuration
-GROQ_MODEL = "llama-3.1-8b-instant"  # Ou 'llama3-8b-8192' pour plus rapide
+GROQ_MODEL = "llama-3.3-70b-versatile"  # Ou 'llama3-8b-8192' pour plus rapide
 TEMPERATURE = 0.7  # Créativité
 MAX_RETRIES = 5
 INITIAL_DELAY = 1
@@ -1842,7 +1842,7 @@ def segment_node(state: GraphState) -> Dict:
 def analyze_node(state: GraphState) -> Dict:
     api_key = load_api_key()
     client = create_groq_client(api_key)
-    model = state.get("model_name", "llama-3.1-8b-instant")
+    model = state.get("model_name", "llama-3.3-70b-versatile")
     all_codes = []
     for seg in state["segments"]:
         codes = analyze_and_code_segment(client, model, seg)
@@ -1856,7 +1856,7 @@ def analyze_node(state: GraphState) -> Dict:
 def judge_node(state: GraphState) -> Dict:
     api_key = load_api_key()
     client = create_groq_client(api_key)
-    model = "llama-3.1-8b-instant"
+    model = "llama-3.3-70b-versatile"
     validated = []
     for seg in state["segments"]:
         codes_for_seg = [c for c in state["all_codes"] if c.get("segment") == seg]
@@ -1876,7 +1876,7 @@ def cluster_node(state: GraphState) -> Dict:
 def label_node(state: GraphState) -> Dict:
     api_key = load_api_key()
     client = create_groq_client(api_key)
-    model = state.get("model_name", "llama-3.1-8b-instant")
+    model = state.get("model_name", "llama-3.3-70b-versatile")
     theme_labels = label_themes(client, model, state["clusters"])
     return {"theme_labels": theme_labels}
 
@@ -1884,7 +1884,7 @@ def label_node(state: GraphState) -> Dict:
 def meta_cluster_node(state: GraphState) -> GraphState:
     api_key = load_api_key()
     client = create_groq_client(api_key)
-    model = state.get("model_name", "llama-3.1-8b-instant")
+    model = state.get("model_name", "llama-3.3-70b-versatile")
 
     meta_theme_map, theme_to_meta = meta_cluster_themes(
         client,
@@ -1996,7 +1996,7 @@ def synthese_corpus_node(context):
     logger.info("Démarrage de la synthèse globale du corpus")
     api_key = load_api_key()
     client = create_groq_client(api_key)
-    model = context.get("model_name", "llama-3.1-8b-instant")
+    model = context.get("model_name", "llama-3.3-70b-versatile")
 
     all_codes = context["all_codes"]  # Liste complète des codes de tous les entretiens
     theme_labels = context["theme_labels"]
@@ -2059,79 +2059,94 @@ def generate_synthese(
     max_retries: int = 2
 ) -> str:
     """
-    Génère un rapport d’analyse sociologique complet, interprétatif et problématisé.
+    Génère une synthèse sociologique interprétative, précise et rigoureuse à partir des clusters de codes, 
+    en suivant précisément la méthode d’analyse thématique de Braun & Clarke (2006). 
+    La sortie est prête à être intégrée directement dans ton rapport final.
     """
-    # Construction du prompt
-    prompt = f"""
-Tu es un sociologue du numérique, spécialisé dans l'analyse qualitative assistée par intelligence artificielle.
 
-Tu disposes d'un codage thématique réalisé automatiquement à partir d'entretiens. Les données sont regroupées par thèmes et méta-thèmes, chaque thème étant associé à plusieurs extraits de verbatims (entre guillemets).
+    # Prompt principal, rigoureusement structuré selon tes précédentes consignes
+    prompt = """
+Tu es un sociologue du numérique spécialisé en analyse qualitative assistée par IA.  
+Tu viens de terminer une étude par entretiens codés selon la méthode d’analyse thématique de Braun & Clarke (2006).
 
-Tu dois produire un **rapport de recherche sociologique**, structuré, interprétatif, problématisé.
+Ta tâche est de rédiger une synthèse interprétative très qualitative, en suivant précisément cette structure : 
 
-Le rapport doit inclure :
+---
 
-1. **Introduction générale**
-   - Contexte de l'enquête
-   - Présentation rapide de la méthode : analyse qualitative, codage automatisé, regroupement en clusters.
+ **Structure attendue du rapport** :
 
-2. **Développement**
-    Concentre ton développement sur les **3 méta-thèmes les plus significatifs** du corpus, ceux où les discours révèlent le plus de complexité, de tensions ou de richesse sociologique. Pour chacun :
-    - Problématise sociologiquement.
-    - Mobilise plusieurs extraits illustratifs (au moins 2 par thème), que tu analyses.
-    - Interprète les postures exprimées (enthousiasme, crainte, dépendance, ruse, etc.)
-    - Compare les postures ou usages contrastés si nécessaire.
-    - Dégage les enjeux plus larges (école, autonomie, normativité, etc.)
-    - Mets en évidence les **tensions, ambivalences ou logiques sociales** révélées
+1. **Titre général** (créatif, pertinent par rapport aux données)
 
-    Les autres thèmes peuvent être mentionnés brièvement dans une synthèse transversale ou en encadré récapitulatif, sans analyse approfondie.
+2. **Introduction générale** (un paragraphe clair qui précise : contexte sociologique, objectifs, méthode utilisée (entretiens semi-directifs, codage thématique inductif), et annonce brièvement les axes principaux abordés).
+
+3. **Développement** (sélectionne strictement les 3 à 4 thèmes principaux, les plus pertinents ou interdépendants) :
    
+    Chaque thème est rédigé en respectant les points suivants :
+    1. Nomme clairement et précisément chaque thème. (ex: "Thème 1 : Pratiques de codage thématique")
+    2. Décrit de manière concise mais analytique "l'essence" du thème, en expliquant 
+       clairement son contenu et en précisant pourquoi il est pertinent sociologiquement.
+    3. Fournit des extraits verbatims spécifiques et représentatifs pour illustrer le thème.
+       (2 à 3 extraits courts maximum, insérés directement dans le texte avec des guillemets).
+    4. Présente une analyse approfondie en reliant clairement les thèmes au contexte social,
+       aux enjeux et aux problématiques de recherche. 
+       Explique les implications sociales et théoriques du thème.
+    5. Évite absolument la paraphrase. Le texte doit être analytique et interprétatif, pas descriptif.
+    6. Conclut chaque thème par une réflexion critique sur ce qu'il révèle en profondeur 
+       sur le phénomène étudié.
 
-3. **Conclusion critique**
-    - Résume les enseignements majeurs
-    - Met en lumière des typologies d’usagers si possible
-    - Souligne les enjeux sociétaux et éthiques
-    - Évoque les limites de l’enquête et des pistes de prolongement
+4. **Conclusion critique** (court paragraphe : quelles dynamiques globales ressortent ? Quelles contradictions ou tensions apparaissent ? Quelle réflexion théorique ou sociologique cela ouvre-t-il ?).
 
-🎯 Sois analytique, nuancé, professionnel. Tu écris pour un lectorat universitaire ou expert.
+5. **Limites et réflexivité** (court paragraphe : éventuels biais, limites méthodologiques et contextuelles).
 
-Voici les données :\n
+6. **Ouvertures / prolongements** (court paragraphe : perspectives futures d'enquête, pistes pratiques, ou besoins de formation éventuels identifiés à partir de ces résultats).
+
+---
+
+🔎 **Recommandations importantes d’écriture** :
+- Tu dois être rigoureux, clair et analytique.
+- Le texte doit être structuré, précis et fluide (titres, paragraphes argumentés).
+- Ne fais pas un résumé des données : tu dois produire une véritable **analyse interprétative sociologique**.
+- Appuie-toi explicitement sur les extraits cités pour problématiser et dégager des pistes de réflexion.
+- Évite la paraphrase, privilégie l’analyse approfondie.
+
+---
+
+Voici les thèmes et extraits à synthétiser analytiquement (sélectionne uniquement 3 ou 4 thèmes majeurs pour le développement, ceux qui semblent les plus pertinents ou intéressants sociologiquement) :
 """
 
-    # Ajouter les données structurées au prompt
+    # Ajout des données : thèmes et extraits pour l'analyse
     for cluster_id, codes in clusters.items():
-        theme = theme_labels.get(cluster_id, f"Thème {cluster_id}")
-        meta_theme = ""
-        if meta_theme_labels and theme_to_meta:
-            meta_id = theme_to_meta.get(cluster_id)
-            meta_theme = meta_theme_labels.get(meta_id, "")
-
-        prompt += f"\n📌 Méta-thème : {meta_theme}\n"
-        prompt += f"### Thème : {theme}\n"
+        theme_name = theme_labels.get(cluster_id, f"Thème {cluster_id}")
+        prompt += f"\n### {theme_name} :\n"
         for code in codes:
-            excerpt = code.get("excerpt", "").strip().replace("\n", " ")
-            if excerpt:
-                prompt += f'- Extrait : "{excerpt}"\n'
+            label = code.get("code", "Code inconnu")
+            excerpt = code.get("excerpt", "").replace("\n", " ").strip()
+            prompt += f"- {label} : « {excerpt} »\n"
+        prompt += "\n"
 
-    # Envoi au modèle
+    if meta_theme_labels and theme_to_meta:
+        prompt += "\nOrganise clairement la structure du développement en t'appuyant sur les méta-thèmes fournis si possible.\n"
+
+    # Appel à l'API Groq
     messages = [{"role": "user", "content": prompt}]
 
     for attempt in range(max_retries + 1):
         try:
-            logger.info(f"Génération du rapport sociologique (tentative {attempt+1}/{max_retries+1})")
+            logger.info(f"Génération du rapport global (tentative {attempt + 1}/{max_retries + 1})")
             resp = client.chat.completions.create(
                 model=model,
                 messages=messages,
                 temperature=0.4,
-                max_tokens=4096,
+                max_tokens=2048,
             )
             result = resp.choices[0].message.content.strip()
             if result:
-                logger.info("✅ Rapport global généré avec succès.")
+                logger.info("✅ Synthèse globale générée avec succès.")
                 return result
+
         except Exception as e:
-            logger.error(f"Erreur lors de la génération du rapport (tentative {attempt+1}): {e}", exc_info=True)
+            logger.error(f"❌ Erreur lors de la génération de la synthèse (tentative {attempt + 1}): {e}", exc_info=True)
             if attempt == max_retries:
-                raise RuntimeError("Échec de la génération du rapport final.") from e
+                raise RuntimeError("Échec de la génération de la synthèse après plusieurs tentatives.") from e
 
     return ""
