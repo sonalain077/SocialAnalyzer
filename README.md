@@ -91,4 +91,4 @@ Les rapports générés sont sauvegardés dans :
 
 ### Remerciement 
 
-Je tiens à remercier chaleureusement Bilel Bendouzid, le laboratoire LISIS, ainsi que l’équipe Cortex pour m’avoir offert l’opportunité de réaliser ce projet, et pour leur accompagnement tout au long de cette aventure scientifique et technique.
+Je tiens à remercier chaleureusement Bilel Benbouzid, le laboratoire LISIS, ainsi que l’équipe Cortex pour m’avoir offert l’opportunité de réaliser ce projet, et pour leur accompagnement tout au long de cette aventure scientifique et technique.
