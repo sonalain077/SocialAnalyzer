@@ -6,7 +6,7 @@ Ce projet propose un pipeline automatisé qui exploite les modèles d'intelligen
 
 ---
 
-## 🚀 Fonctionnalités clés
+## Fonctionnalités clés
 
 - **Extraction automatique des données** depuis des entretiens PDF.
 - **Analyse thématique inductive** selon Braun & Clarke.
@@ -16,7 +16,7 @@ Ce projet propose un pipeline automatisé qui exploite les modèles d'intelligen
 
 ---
 
-## 🎯 Objectifs du projet
+## Objectifs du projet
 
 - Automatiser l’analyse qualitative d'entretiens sociologiques.
 - Produire rapidement des rapports interprétatifs et approfondis.
@@ -25,7 +25,7 @@ Ce projet propose un pipeline automatisé qui exploite les modèles d'intelligen
 
 ---
 
-## ⚙️ Installation & Configuration
+## Installation & Configuration
 
 ### 1. Clonez le dépôt
 
