@@ -2026,7 +2026,7 @@ def synthese_corpus_node(context):
 
     logger.info(f"Rapport global sauvegardé dans {output_path}")
 
-    return context
+    return context  
 
 __all__ = [
     'extract_node',
@@ -2038,7 +2038,9 @@ __all__ = [
     'label_node',
     'meta_cluster_node',
     'compile_node',
-    'report_node'
+    'report_node',
+    'synthese_corpus_node',
+    'refine_synthese_node'
 ]
 
 import pandas as pd
@@ -2150,3 +2152,129 @@ Voici les thèmes et extraits à synthétiser analytiquement (sélectionne uniqu
                 raise RuntimeError("Échec de la génération de la synthèse après plusieurs tentatives.") from e
 
     return ""
+
+
+def refine_synthese_qualitative(client, model, rapport_global: str, max_retries: int = 2) -> str:
+    """
+    Améliore la synthèse existante pour la rendre plus sociologique, analytique et critique.
+    """
+
+    prompt = f"""
+Tu es un sociologue expérimenté.  
+Tu reçois un rapport d’analyse thématique généré automatiquement à partir d’entretiens.  
+Ton rôle est de l’améliorer, non pas en le réécrivant entièrement, mais en le rendant plus sociologique, plus analytique et plus développé (3 à 5 pages).  
+
+⚠️ Le texte est déjà structuré (introduction, thèmes, conclusion). Ne change pas la structure.  
+Travaille uniquement sur la qualité, la profondeur et la longueur.  
+
+---
+
+### Axes d’amélioration obligatoires
+
+#### 1. Profondeur analytique
+- Développe les analyses : chaque thème doit faire au minimum 2 à 3 paragraphes.  
+- Va au-delà du descriptif, propose une **interprétation critique**.  
+- Utilise des concepts sociologiques pertinents : *capital culturel, rapport au savoir, dépendance technologique comme rapport de pouvoir, anxiété créative, autonomie étudiante, reproduction sociale, pratiques numériques, etc.*  
+
+#### 2. Articulation entre thèmes
+- Relie explicitement les thèmes entre eux.  
+- Exemple : montre comment la dépendance influence les stratégies d’apprentissage, ou comment les limites perçues nourrissent l’anxiété créative.  
+- Fais apparaître des **dynamiques transversales** et des tensions (autonomie vs dépendance, efficacité vs perte de réflexivité).  
+- Dans le développement, montre non seulement les spécificités de chaque thème, mais aussi les tensions qui les relient. L’analyse doit révéler une dynamique d’ensemble et non pas des blocs isolés
+
+#### 3. Cadre théorique
+- Intègre des **références à plusieurs traditions sociologiques**, mais **ne te limite pas uniquement à quelques auteurs**.  
+- Varie les ancrages et mobilise des références pertinentes en fonction des thèmes :  
+  - **Sociologie de l’éducation** (ex. Bourdieu, Lahire, Dubet, Bernstein, Charlot, etc.).  
+  - **Sociologie des usages numériques** (ex. Cardon, Jouët, Proulx, Livingstone, Silverstone, etc.).  
+  - **Sociologie de la technique** (ex. Latour, Akrich, Feenberg, Winner, Simondon, etc.).  
+- Ne cite pas toujours les mêmes auteurs (éviter la répétition systématique). Varie les références et mobilise celles qui s’appliquent le mieux à chaque thème. Tu peux combiner auteurs classiques et contemporains.
+- Tu peux également mobiliser d’autres approches complémentaires si elles enrichissent l’analyse : *sociologie critique, interactionnisme, sociologie pragmatique, etc.*  
+- Les références doivent être **variées et intégrées de manière fluide**, pour éviter la répétition systématique des mêmes auteurs.  
+
+#### 4. Conclusion critique
+- Allonge la conclusion pour en faire un vrai moment de **discussion critique**.  
+- Identifie clairement les contradictions centrales (ex. autonomie proclamée vs dépendance vécue, efficacité immédiate vs perte de réflexivité).  
+- Discute les implications sociologiques et éducatives de ces contradictions.  
+- Ouvre vers des **perspectives théoriques et pratiques** : politiques éducatives, formation des enseignants, appropriation critique des outils numériques.  
+
+---
+
+### Instructions d’écriture
+- Conserve la structure initiale (titres, sous-titres).  
+- Développe chaque section pour obtenir un texte final d’environ **3000 à 4000 mots**.  
+- Utilise un style académique, fluide et critique.  
+- Intègre les citations déjà présentes, en les discutant en profondeur.  
+- Le résultat doit ressembler à un **compte rendu sociologique abouti**, pas à une simple reformulation.  
+
+---
+
+### Entrée :
+Un rapport généré automatiquement.  
+
+### Sortie :
+Le même rapport, mais enrichi, approfondi et développé (≈ 3000–4000 mots), avec une **analyse sociologique poussée**, variée et critique.
+
+Voici le rapport à améliorer :
+-------------------------------
+{rapport_global}
+-------------------------------
+
+Donne-moi la version améliorée directement, sans intro ou explication supplémentaire.
+"""
+
+    messages = [{"role": "user", "content": prompt}]
+    
+    for attempt in range(max_retries + 1):
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0.4,
+                max_tokens=4096,
+            )
+            result = response.choices[0].message.content.strip()
+            if result:
+                return result
+        except Exception as e:
+            logger.error(f"[Refinement] Erreur tentative {attempt + 1} : {e}")
+            if attempt == max_retries:
+                raise RuntimeError("Échec du raffinement après plusieurs tentatives.") from e
+
+    return ""
+
+def refine_synthese_node(context):
+    """
+    Node LangGraph pour raffiner la synthèse globale avec un regard sociologique plus poussé.
+    """
+    print("✅ Raffinement exécuté")
+    logger.info("🔍 Raffinement du rapport global (approfondissement sociologique)")
+    
+    api_key = load_api_key()
+    client = create_groq_client(api_key)
+    model = context.get("model_name", "llama-3.3-70b-versatile")
+
+    rapport_global = context.get("rapport_global", "")
+    if not rapport_global:
+        raise ValueError("Aucun rapport global trouvé pour le raffinement.")
+
+    refined = refine_synthese_qualitative(client, model, rapport_global)
+
+    # Mise à jour du contexte
+
+    context["rapport_global_refined"] = refined
+
+    # Sauvegarde finale
+    output_path = os.path.join("data", "repport", "rapport_global_affine.txt")
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(refined)
+
+    logger.info(f"✅ Rapport global enrichi sauvegardé dans {output_path}")
+
+    return GraphState(**context)
+
+
+
+
+
+

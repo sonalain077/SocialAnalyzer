@@ -56,12 +56,14 @@ class GraphState(TypedDictExt, total=False):
     code_to_cluster: Dict[str, int]
     theme_labels: Dict[int, str]
     final_report: str
+    rapport_global: str
+    rapport_global_refined: str
     output_files: Dict[str, str]
     model_name: str
     temperature: float
     api_key: str
     logs: List[str]
-    meta_theme_labels: Dict[int, str]  # Nouveau
+    meta_theme_labels: Dict[int, str]  
     theme_to_meta: Dict[int, int]  
     global_synthesis: str
     files_processed: int 

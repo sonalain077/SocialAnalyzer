@@ -73,6 +73,20 @@ def run_pipeline(raw_dir="data/raw", max_themes=10):
                 f.write(global_synth)
 
             print(f"\n📝 Synthèse globale sauvegardée : {output_path}")
+        
+        refined_synth = result_state.get("rapport_global_refined", None)
+
+        if refined_synth:
+            print(f"\n===== Synthèse globale affinée du corpus =====\n")
+            print(refined_synth)
+
+            output_path = Path("output") / "synthese_globale_corpus_refined.txt"
+            output_path.parent.mkdir(exist_ok=True)
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(refined_synth)
+
+            print(f"\n📝 Synthèse globale affinée sauvegardée : {output_path}")
+        
 
     print("\n=== Pipeline terminé pour tous les fichiers ===")
 

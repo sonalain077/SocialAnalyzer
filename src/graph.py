@@ -34,7 +34,8 @@ def build_graph() -> "CompiledGraph[GraphState]":
         meta_cluster_node,
         compile_node,
         report_node,
-        synthese_corpus_node
+        synthese_corpus_node,
+        refine_synthese_node
     )
     
 
@@ -49,6 +50,7 @@ def build_graph() -> "CompiledGraph[GraphState]":
     graph.add_node("compile", compile_node)
     graph.add_node("rapport", report_node)
     graph.add_node("synthese", synthese_corpus_node)
+    graph.add_node("refine", refine_synthese_node)
 
     # --- Connexions ---------------------------------------------------------------
 
@@ -62,7 +64,8 @@ def build_graph() -> "CompiledGraph[GraphState]":
     graph.add_edge("label", "meta_cluster")
     graph.add_edge("meta_cluster", "compile")
     graph.add_edge("compile", "rapport")
-    graph.add_edge("synthese", END) 
+    graph.add_edge("synthese", "refine") 
+    graph.add_edge("refine", END)
 
     # Ajout de la condition pour la synthèse du corpus
     graph.add_conditional_edges(
